@@ -94,6 +94,19 @@
             margin-right: auto;
             display: none;
         }
+        .countdown {
+            font-size: 14px;
+            color: #ff6600;
+            font-weight: bold;
+            margin: 8px 0;
+            padding: 10px 15px;
+            background: rgba(255,204,153,0.9);
+            border-radius: 8px;
+            max-width: 400px;
+            margin-left: auto;
+            margin-right: auto;
+            display: none;
+        }
         .red { color: #dc3232; }
         .blue { color: #3232dc; }
         .menu-panel {
@@ -147,6 +160,15 @@
         <button id="btn-about">说明</button>
     </div>
 
+    <!-- 难度选择 -->
+    <div id="difficulty-select" class="menu-panel" style="display: none;">
+        <h1>选择难度</h1>
+        <button id="btn-easy">简单</button>
+        <button id="btn-medium">中等</button>
+        <button id="btn-hell">地狱</button>
+        <button id="btn-back-from-difficulty" class="secondary">返回</button>
+    </div>
+
     <!-- 说明页面 -->
     <div id="about-panel" class="rule-panel" style="display: none;">
         <h1 style="text-align:center;">说明</h1>
@@ -154,7 +176,7 @@
             <!-- 在这里编辑说明内容 -->
             <p>游戏设计：Hong Yixiao</p>
 			<p>编程开发：Claude Code v2.1.143 + doubao-seed-2.0-code</p>
-            <p>AI算法：Minimax + Alpha-Beta剪枝，深度3</p>
+            <p>AI算法：简单(贪心)，中等(Minimax深度2)，地狱(Minimax深度3)</p>
             <p>游戏版本：V1.0</p>
         </div>
         <div class="rule-nav" style="margin-top: 20px;">
@@ -187,6 +209,7 @@
                 <h3>胜利条件</h3>
                 <p>1. 对方棋子归零</p>
                 <p>2. 对方无法走棋</p>
+                <p>3. 连续10步无翻转强制结算</p>
             </div>
         </div>
         <div class="page-indicator" id="page-indicator">1/5</div>
@@ -209,6 +232,7 @@
         </div>
         <div class="message" id="message"></div>
         <div class="instruction" id="instruction"></div>
+        <div class="countdown" id="countdown"></div>
 
         <!-- 翻转/跳过按钮 -->
         <div class="button-group">
@@ -228,6 +252,6 @@
         </div>
     </div>
 
-    <script src="game.js?v=3"></script>
+    <script src="game.js?v=4"></script>
 </body>
 </html>

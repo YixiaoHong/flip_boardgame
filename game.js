@@ -646,6 +646,11 @@ class Game {
         this.animationProgress = 0;
         this.animationFrameId = null;
 
+        // 强制结算相关
+        this.noFlipStepCount = 0;  // 无翻转步数计数（每走一步算一步）
+        this.lastActionPlayer = null;  // 最后执行动作的玩家
+        this.flipOccurredThisStep = false;  // 当前这步是否发生了翻转
+
         // 窗口大小变化监听
         window.addEventListener('resize', () => {
             this.resizeCanvas();
@@ -708,7 +713,13 @@ class Game {
                 availableGroups: JSON.parse(JSON.stringify(this.chainHandler.availableGroups)),
                 selectedGroup: this.chainHandler.selectedGroup
             },
-            gameMode: this.gameMode
+            gameMode: this.gameMode,
+            noFlipStepCount: this.noFlipStepCount,
+            lastActionPlayer: this.lastActionPlayer,
+            flipOccurredThisStep: this.flipOccurredThisStep,
+            forceSettleWinner: this.forceSettleWinner,
+            forceSettleP1Count: this.forceSettleP1Count,
+            forceSettleP2Count: this.forceSettleP2Count
         };
     }
 
@@ -732,6 +743,12 @@ class Game {
         if (state.gameMode) {
             this.gameMode = state.gameMode;
         }
+        this.noFlipStepCount = state.noFlipStepCount || 0;
+        this.lastActionPlayer = state.lastActionPlayer;
+        this.flipOccurredThisStep = state.flipOccurredThisStep || false;
+        this.forceSettleWinner = state.forceSettleWinner;
+        this.forceSettleP1Count = state.forceSettleP1Count;
+        this.forceSettleP2Count = state.forceSettleP2Count;
     }
 
     undo() {
@@ -820,6 +837,14 @@ class Game {
         if (mode === 'pve') {
             this.ai = new SimpleAI(2);
         }
+
+        // 重置强制结算相关变量
+        this.noFlipStepCount = 0;
+        this.lastActionPlayer = null;
+        this.flipOccurredThisStep = false;
+        this.forceSettleWinner = null;
+        this.forceSettleP1Count = null;
+        this.forceSettleP2Count = null;
 
         // 初始化历史记录
         this.history = [this.saveState()];
@@ -948,6 +973,12 @@ class Game {
     doMove(from, to) {
         this.history.push(this.saveState());
 
+        // 记录当前玩家是最后一个动作的玩家
+        this.lastActionPlayer = this.currentPlayer;
+
+        // 标记这步还未发生翻转
+        this.flipOccurredThisStep = false;
+
         // 播放移动动画
         this.animationState = {
             type: 'move',
@@ -986,6 +1017,9 @@ class Game {
             this.history.push(this.saveState());
             const group = this.pendingFlipGroups[this.selectedFlipGroup];
 
+            // 标记这步发生了翻转
+            this.flipOccurredThisStep = true;
+
             // 播放翻转动画
             const flips = group.flips.map(([pos, _]) => ({
                 pos: pos,
@@ -1023,6 +1057,9 @@ class Game {
             this.history.push(this.saveState());
             const groups = this.chainHandler.availableGroups;
             const group = groups[this.chainHandler.selectedGroup];
+
+            // 标记这步发生了翻转
+            this.flipOccurredThisStep = true;
 
             // 播放翻转动画
             const flips = group.flips.map(([pos, _]) => ({
@@ -1079,6 +1116,21 @@ class Game {
             return;
         }
 
+        // 更新无翻转步数计数
+        if (this.flipOccurredThisStep) {
+            // 这步有翻转，重置计数
+            this.noFlipStepCount = 0;
+        } else {
+            // 这步没翻转，计数+1
+            this.noFlipStepCount++;
+        }
+
+        // 检查是否达到强制结算条件（连续10步无翻转）
+        if (this.noFlipStepCount >= 10) {
+            this.forceSettle();
+            return;
+        }
+
         // 先切换玩家
         this.currentPlayer = 3 - this.currentPlayer;
 
@@ -1095,6 +1147,28 @@ class Game {
             const timer = setTimeout(() => this.doAIMove(), 800);
             this.aiTimers.push(timer);
         }
+    }
+
+    forceSettle() {
+        // 强制结算
+        const p1Count = this.board.countPieces(1);
+        const p2Count = this.board.countPieces(2);
+
+        let winner;
+        if (p1Count > p2Count) {
+            winner = 1;
+        } else if (p2Count > p1Count) {
+            winner = 2;
+        } else {
+            // 棋子一样多，最后执行动作的玩家获胜
+            winner = this.lastActionPlayer || 1;
+        }
+
+        // 保存获胜者信息，用于在UI显示
+        this.forceSettleWinner = winner;
+        this.forceSettleP1Count = p1Count;
+        this.forceSettleP2Count = p2Count;
+        this.state = STATE.GAME_OVER;
     }
 
     doAIMove() {
@@ -1178,6 +1252,15 @@ class Game {
         this.selectedPos = null;
         this.pendingFlipGroups = [];
         this.selectedFlipGroup = null;
+
+        // 重置强制结算相关变量
+        this.noFlipStepCount = 0;
+        this.lastActionPlayer = null;
+        this.flipOccurredThisStep = false;
+        this.forceSettleWinner = null;
+        this.forceSettleP1Count = null;
+        this.forceSettleP2Count = null;
+
         this.history = [this.saveState()];
         this.render();
     }
@@ -1430,6 +1513,7 @@ class Game {
         const scoreEl = document.getElementById('score');
         const messageEl = document.getElementById('message');
         const instructionEl = document.getElementById('instruction');
+        const countdownEl = document.getElementById('countdown');
         const btnConfirm = document.getElementById('btn-confirm');
         const btnSkip = document.getElementById('btn-skip');
         const btnUndo = document.getElementById('btn-undo');
@@ -1440,19 +1524,37 @@ class Game {
 
         if (this.state === STATE.GAME_OVER) {
             let winner;
-            const p1Count = this.board.countPieces(1);
-            const p2Count = this.board.countPieces(2);
+            let isForceSettle = false;
+            let p1Count, p2Count;
 
-            if (p1Count === 0) winner = 2;
-            else if (p2Count === 0) winner = 1;
-            else winner = this.currentPlayer === 1 ? 2 : 1;
+            if (this.forceSettleWinner) {
+                // 强制结算
+                isForceSettle = true;
+                winner = this.forceSettleWinner;
+                p1Count = this.forceSettleP1Count;
+                p2Count = this.forceSettleP2Count;
+            } else {
+                // 正常结束
+                p1Count = this.board.countPieces(1);
+                p2Count = this.board.countPieces(2);
+
+                if (p1Count === 0) winner = 2;
+                else if (p2Count === 0) winner = 1;
+                else winner = this.currentPlayer === 1 ? 2 : 1;
+            }
 
             currentTurnEl.textContent = '';
-            messageEl.textContent = `玩家${winner}获胜！`;
+            if (isForceSettle) {
+                messageEl.textContent = `僵局！连续10步无翻转，玩家${winner}获胜（红${p1Count}vs蓝${p2Count}）`;
+            } else {
+                messageEl.textContent = `玩家${winner}获胜！`;
+            }
             messageEl.className = winner === 1 ? 'red' : 'blue';
             btnConfirm.style.display = 'none';
             btnSkip.style.display = 'none';
             btnUndo.style.display = 'none';
+            instructionEl.style.display = 'none';
+            countdownEl.style.display = 'none';
             btnRestart.style.display = 'inline-block';
             btnBack.style.display = 'inline-block';
         } else {
@@ -1484,6 +1586,18 @@ class Game {
                 btnConfirm.style.display = 'none';
                 btnSkip.style.display = 'none';
                 instructionEl.style.display = 'none';
+            }
+
+            // 显示强制结算倒计时
+            if (this.noFlipStepCount > 0) {
+                countdownEl.style.display = 'block';
+                if (this.noFlipStepCount === 1) {
+                    countdownEl.textContent = `⚠️ 上一步无翻转，请注意！还剩9步将强制结算！`;
+                } else {
+                    countdownEl.textContent = `⚠️ 连续${this.noFlipStepCount}步无翻转，还剩${10 - this.noFlipStepCount}步将强制结算！`;
+                }
+            } else {
+                countdownEl.style.display = 'none';
             }
 
             // 悔棋按钮：只在玩家回合且AI没有思考时显示
