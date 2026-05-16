@@ -10,6 +10,7 @@ const SELECTED_COLOR = '#00ff00';
 
 const STATE = {
     MODE_SELECT: 'mode_select',
+    DIFFICULTY_SELECT: 'difficulty_select',
     RULE_INTRO: 'rule_intro',
     SELECTING: 'selecting',
     MOVING: 'moving',
@@ -338,6 +339,111 @@ class ChainFlipHandler {
     }
 }
 
+// 简单难度：贪心算法
+class GreedyAI {
+    constructor(playerNum) {
+        this.playerNum = playerNum;
+        this.opponent = 3 - playerNum;
+    }
+
+    chooseMove(board) {
+        let bestScore = -Infinity;
+        let bestMoves = [];
+        const fromPositions = board.getValidMoves(this.playerNum);
+
+        for (const from of fromPositions) {
+            const toPositions = board.getValidMoves(this.playerNum, from);
+            for (const to of toPositions) {
+                const score = this.evaluateMove(board, from, to);
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestMoves = [[from, to]];
+                } else if (score === bestScore) {
+                    bestMoves.push([from, to]);
+                }
+            }
+        }
+        if (bestMoves.length > 0) {
+            return bestMoves[Math.floor(Math.random() * bestMoves.length)];
+        }
+        return null;
+    }
+
+    evaluateMove(board, from, to) {
+        const simBoard = board.copy();
+        simBoard.movePiece(from, to);
+
+        let score = 0;
+
+        // 评估：立即能翻转的棋子数量最重要
+        const flipRule = new FlipRule(simBoard);
+        const flipGroups = flipRule.getFlipGroupsAfterMove(this.playerNum, to);
+        let maxFlips = 0;
+        for (const group of flipGroups) {
+            if (group.flips.length > maxFlips) {
+                maxFlips = group.flips.length;
+            }
+        }
+        score += maxFlips * 100;
+
+        // 位置评估
+        score += Board.evaluatePosition(to) * 10;
+
+        // 增加一些随机性，让游戏不那么单调
+        score += Math.random() * 5;
+
+        return score;
+    }
+
+    chooseFlipGroup(groups) {
+        // 贪心：选择翻转最多的
+        let bestScore = -1;
+        let bestIndices = [];
+        for (let i = 0; i < groups.length; i++) {
+            let score = groups[i].flips.length * 10;
+            if (groups[i].type === 'b') score += 5;
+            if (score > bestScore) {
+                bestScore = score;
+                bestIndices = [i];
+            } else if (score === bestScore) {
+                bestIndices.push(i);
+            }
+        }
+        return bestIndices[Math.floor(Math.random() * bestIndices.length)];
+    }
+
+    chooseChainTrigger(chainHandler) {
+        const triggers = chainHandler.getTriggers();
+        if (triggers.length === 0) return [null, null];
+
+        let bestScore = -1;
+        let bestOptions = [];
+
+        for (const trigger of triggers) {
+            chainHandler.selectTrigger(trigger);
+            const groups = chainHandler.getAvailableGroups();
+            if (groups.length === 0) continue;
+
+            const groupIdx = this.chooseFlipGroup(groups);
+            let score = groups[groupIdx].flips.length * 10;
+            if (groups[groupIdx].type === 'b') score += 5;
+
+            if (score > bestScore) {
+                bestScore = score;
+                bestOptions = [[trigger, groupIdx]];
+            } else if (score === bestScore) {
+                bestOptions.push([trigger, groupIdx]);
+            }
+        }
+
+        if (bestOptions.length > 0) {
+            return bestOptions[Math.floor(Math.random() * bestOptions.length)];
+        }
+        return [null, null];
+    }
+}
+
+// Minimax AI（中等和地狱难度）
 class SimpleAI {
     constructor(playerNum, depth = 3) {
         this.playerNum = playerNum;
@@ -714,6 +820,7 @@ class Game {
                 selectedGroup: this.chainHandler.selectedGroup
             },
             gameMode: this.gameMode,
+            difficulty: this.difficulty,
             noFlipStepCount: this.noFlipStepCount,
             lastActionPlayer: this.lastActionPlayer,
             flipOccurredThisStep: this.flipOccurredThisStep,
@@ -743,12 +850,26 @@ class Game {
         if (state.gameMode) {
             this.gameMode = state.gameMode;
         }
+        if (state.difficulty) {
+            this.difficulty = state.difficulty;
+        }
         this.noFlipStepCount = state.noFlipStepCount || 0;
         this.lastActionPlayer = state.lastActionPlayer;
         this.flipOccurredThisStep = state.flipOccurredThisStep || false;
         this.forceSettleWinner = state.forceSettleWinner;
         this.forceSettleP1Count = state.forceSettleP1Count;
         this.forceSettleP2Count = state.forceSettleP2Count;
+
+        // 重新创建AI实例（AI是无状态的，可以直接重建）
+        if (this.gameMode === 'pve') {
+            if (this.difficulty === 'easy') {
+                this.ai = new GreedyAI(2);
+            } else if (this.difficulty === 'medium') {
+                this.ai = new SimpleAI(2, 2);
+            } else { // hell
+                this.ai = new SimpleAI(2, 3);
+            }
+        }
     }
 
     undo() {
@@ -804,7 +925,7 @@ class Game {
         }, { passive: false });
 
         document.getElementById('btn-pvp').addEventListener('click', () => this.startGame('pvp'));
-        document.getElementById('btn-pve').addEventListener('click', () => this.startGame('pve'));
+        document.getElementById('btn-pve').addEventListener('click', () => this.showDifficultySelect());
         document.getElementById('btn-rules').addEventListener('click', () => this.showRules());
         document.getElementById('btn-about').addEventListener('click', () => this.showAbout());
         document.getElementById('btn-back').addEventListener('click', () => this.backToMenu());
@@ -818,10 +939,33 @@ class Game {
         document.getElementById('btn-back-rules').addEventListener('click', () => this.backToMenuFromRules());
         document.getElementById('btn-back-from-about').addEventListener('click', () => this.backFromAbout());
 
+        // 难度选择按钮
+        document.getElementById('btn-easy').addEventListener('click', () => this.startGameWithDifficulty('easy'));
+        document.getElementById('btn-medium').addEventListener('click', () => this.startGameWithDifficulty('medium'));
+        document.getElementById('btn-hell').addEventListener('click', () => this.startGameWithDifficulty('hell'));
+        document.getElementById('btn-back-from-difficulty').addEventListener('click', () => this.backToMenuFromDifficulty());
+
         window.addEventListener('resize', () => {
             this.resizeCanvas();
             this.render();
         });
+    }
+
+    showDifficultySelect() {
+        document.getElementById('mode-select').style.display = 'none';
+        document.getElementById('difficulty-select').style.display = 'inline-block';
+        this.state = STATE.DIFFICULTY_SELECT;
+    }
+
+    backToMenuFromDifficulty() {
+        document.getElementById('difficulty-select').style.display = 'none';
+        document.getElementById('mode-select').style.display = 'inline-block';
+        this.state = STATE.MODE_SELECT;
+    }
+
+    startGameWithDifficulty(difficulty) {
+        this.difficulty = difficulty;
+        this.startGame('pve');
     }
 
     startGame(mode) {
@@ -835,7 +979,13 @@ class Game {
         this.selectedFlipGroup = null;
         this.gameMode = mode;
         if (mode === 'pve') {
-            this.ai = new SimpleAI(2);
+            if (this.difficulty === 'easy') {
+                this.ai = new GreedyAI(2);
+            } else if (this.difficulty === 'medium') {
+                this.ai = new SimpleAI(2, 2);
+            } else { // hell
+                this.ai = new SimpleAI(2, 3);
+            }
         }
 
         // 重置强制结算相关变量
@@ -850,6 +1000,7 @@ class Game {
         this.history = [this.saveState()];
 
         document.getElementById('mode-select').style.display = 'none';
+        document.getElementById('difficulty-select').style.display = 'none';
         document.getElementById('rule-intro').style.display = 'none';
         document.getElementById('game-area').style.display = 'block';
 
@@ -883,6 +1034,7 @@ class Game {
         document.getElementById('game-area').style.display = 'none';
         document.getElementById('rule-intro').style.display = 'none';
         document.getElementById('about-panel').style.display = 'none';
+        document.getElementById('difficulty-select').style.display = 'none';
         document.getElementById('mode-select').style.display = 'inline-block';
     }
 
@@ -1252,6 +1404,17 @@ class Game {
         this.selectedPos = null;
         this.pendingFlipGroups = [];
         this.selectedFlipGroup = null;
+
+        // 重新创建AI实例
+        if (this.gameMode === 'pve') {
+            if (this.difficulty === 'easy') {
+                this.ai = new GreedyAI(2);
+            } else if (this.difficulty === 'medium') {
+                this.ai = new SimpleAI(2, 2);
+            } else { // hell
+                this.ai = new SimpleAI(2, 3);
+            }
+        }
 
         // 重置强制结算相关变量
         this.noFlipStepCount = 0;
