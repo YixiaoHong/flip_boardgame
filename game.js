@@ -339,7 +339,7 @@ class ChainFlipHandler {
 }
 
 class SimpleAI {
-    constructor(playerNum, depth = 2) {
+    constructor(playerNum, depth = 3) {
         this.playerNum = playerNum;
         this.opponent = 3 - playerNum;
         this.depth = depth;
@@ -353,7 +353,7 @@ class SimpleAI {
         for (const from of fromPositions) {
             const toPositions = board.getValidMoves(this.playerNum, from);
             for (const to of toPositions) {
-                const score = this.simulateMove(board, from, to);
+                const score = this.simulateMoveAndEvaluate(board, from, to);
                 if (score > bestScore) {
                     bestScore = score;
                     bestMoves = [[from, to]];
@@ -362,21 +362,22 @@ class SimpleAI {
                 }
             }
         }
-        // 从最优走法中随机选择一个
         if (bestMoves.length > 0) {
             return bestMoves[Math.floor(Math.random() * bestMoves.length)];
         }
         return null;
     }
 
-    simulateMove(board, from, to) {
+    simulateMoveAndEvaluate(board, from, to) {
         const simBoard = board.copy();
         simBoard.movePiece(from, to);
+
         const flipRule = new FlipRule(simBoard);
         const flipGroups = flipRule.getFlipGroupsAfterMove(this.playerNum, to);
+
         if (flipGroups.length > 0) {
-            let maxFlips = 0;
             let bestGroup = flipGroups[0];
+            let maxFlips = 0;
             for (const group of flipGroups) {
                 if (group.flips.length > maxFlips || (group.flips.length === maxFlips && group.type === 'b')) {
                     maxFlips = group.flips.length;
@@ -386,12 +387,150 @@ class SimpleAI {
             for (const [pos, _] of bestGroup.flips) {
                 simBoard.setPiece(pos, this.playerNum);
             }
+            this.applyBestChainFlips(simBoard, this.playerNum);
         }
-        return this.evaluateBoard(simBoard);
+
+        return this.minimax(simBoard, this.depth - 1, -Infinity, Infinity, false);
+    }
+
+    applyBestChainFlips(board, player) {
+        const flipRule = new FlipRule(board);
+        const chainHandler = new ChainFlipHandler(board, flipRule);
+
+        while (chainHandler.startChainFlip(player)) {
+            const triggers = chainHandler.getTriggers();
+            if (triggers.length === 0) break;
+
+            let bestTrigger = null;
+            let bestGroupIdx = 0;
+            let bestScore = -1;
+
+            for (const trigger of triggers) {
+                chainHandler.selectTrigger(trigger);
+                const groups = chainHandler.getAvailableGroups();
+                if (groups.length === 0) continue;
+
+                const groupIdx = this.chooseFlipGroup(groups);
+                let score = groups[groupIdx].flips.length * 10;
+                if (groups[groupIdx].type === 'b') score += 5;
+
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestTrigger = trigger;
+                    bestGroupIdx = groupIdx;
+                }
+            }
+
+            if (bestTrigger === null) break;
+
+            chainHandler.selectTrigger(bestTrigger);
+            chainHandler.selectedGroup = bestGroupIdx;
+            const group = chainHandler.availableGroups[bestGroupIdx];
+            for (const [pos, _] of group.flips) {
+                board.setPiece(pos, player);
+            }
+        }
+    }
+
+    minimax(board, depth, alpha, beta, isMaximizing) {
+        const p1Count = board.countPieces(1);
+        const p2Count = board.countPieces(2);
+
+        if (p1Count === 0 || p2Count === 0) {
+            if (this.playerNum === 1) {
+                return p2Count === 0 ? 10000 : -10000;
+            } else {
+                return p1Count === 0 ? 10000 : -10000;
+            }
+        }
+
+        const currentPlayer = isMaximizing ? this.playerNum : this.opponent;
+        if (!board.hasAnyMove(currentPlayer)) {
+            if (this.playerNum === 1) {
+                return p1Count > p2Count ? 10000 : -10000;
+            } else {
+                return p2Count > p1Count ? 10000 : -10000;
+            }
+        }
+
+        if (depth === 0) {
+            return this.evaluateBoard(board);
+        }
+
+        if (isMaximizing) {
+            let maxEval = -Infinity;
+            const fromPositions = board.getValidMoves(this.playerNum);
+            for (const from of fromPositions) {
+                const toPositions = board.getValidMoves(this.playerNum, from);
+                for (const to of toPositions) {
+                    const newBoard = board.copy();
+                    newBoard.movePiece(from, to);
+
+                    const flipRule = new FlipRule(newBoard);
+                    const flipGroups = flipRule.getFlipGroupsAfterMove(this.playerNum, to);
+                    if (flipGroups.length > 0) {
+                        let bestGroup = flipGroups[0];
+                        let maxFlips = 0;
+                        for (const group of flipGroups) {
+                            if (group.flips.length > maxFlips || (group.flips.length === maxFlips && group.type === 'b')) {
+                                maxFlips = group.flips.length;
+                                bestGroup = group;
+                            }
+                        }
+                        for (const [pos, _] of bestGroup.flips) {
+                            newBoard.setPiece(pos, this.playerNum);
+                        }
+                        this.applyBestChainFlips(newBoard, this.playerNum);
+                    }
+
+                    const evalScore = this.minimax(newBoard, depth - 1, alpha, beta, false);
+                    maxEval = Math.max(maxEval, evalScore);
+                    alpha = Math.max(alpha, evalScore);
+                    if (beta <= alpha) break;
+                }
+                if (beta <= alpha) break;
+            }
+            return maxEval;
+        } else {
+            let minEval = Infinity;
+            const fromPositions = board.getValidMoves(this.opponent);
+            for (const from of fromPositions) {
+                const toPositions = board.getValidMoves(this.opponent, from);
+                for (const to of toPositions) {
+                    const newBoard = board.copy();
+                    newBoard.movePiece(from, to);
+
+                    const flipRule = new FlipRule(newBoard);
+                    const flipGroups = flipRule.getFlipGroupsAfterMove(this.opponent, to);
+                    if (flipGroups.length > 0) {
+                        let bestGroup = flipGroups[0];
+                        let maxFlips = 0;
+                        for (const group of flipGroups) {
+                            if (group.flips.length > maxFlips || (group.flips.length === maxFlips && group.type === 'b')) {
+                                maxFlips = group.flips.length;
+                                bestGroup = group;
+                            }
+                        }
+                        for (const [pos, _] of bestGroup.flips) {
+                            newBoard.setPiece(pos, this.opponent);
+                        }
+                        this.applyBestChainFlips(newBoard, this.opponent);
+                    }
+
+                    const evalScore = this.minimax(newBoard, depth - 1, alpha, beta, true);
+                    minEval = Math.min(minEval, evalScore);
+                    beta = Math.min(beta, evalScore);
+                    if (beta <= alpha) break;
+                }
+                if (beta <= alpha) break;
+            }
+            return minEval;
+        }
     }
 
     evaluateBoard(board) {
         let score = 0;
+
         const myCount = board.countPieces(this.playerNum);
         const oppCount = board.countPieces(this.opponent);
         score += (myCount - oppCount) * 100;
@@ -407,7 +546,25 @@ class SimpleAI {
             }
         }
 
+        const myMobility = this.countMoves(board, this.playerNum);
+        const oppMobility = this.countMoves(board, this.opponent);
+        score += (myMobility - oppMobility) * 20;
+
+        const flipRule = new FlipRule(board);
+        const myTriggers = flipRule.getTriggers(this.playerNum).length;
+        const oppTriggers = flipRule.getTriggers(this.opponent).length;
+        score += (myTriggers - oppTriggers) * 30;
+
         return score;
+    }
+
+    countMoves(board, player) {
+        let count = 0;
+        const fromPositions = board.getValidMoves(player);
+        for (const from of fromPositions) {
+            count += board.getValidMoves(player, from).length;
+        }
+        return count;
     }
 
     chooseFlipGroup(groups) {
@@ -423,7 +580,6 @@ class SimpleAI {
                 bestIndices.push(i);
             }
         }
-        // 从最优选项中随机选择
         return bestIndices[Math.floor(Math.random() * bestIndices.length)];
     }
 
@@ -432,23 +588,29 @@ class SimpleAI {
         if (triggers.length === 0) return [null, null];
 
         let bestScore = -1;
-        let bestTrigger = null;
-        let bestGroupIdx = 0;
+        let bestOptions = [];
 
         for (const trigger of triggers) {
             chainHandler.selectTrigger(trigger);
             const groups = chainHandler.getAvailableGroups();
             if (groups.length === 0) continue;
+
             const groupIdx = this.chooseFlipGroup(groups);
             let score = groups[groupIdx].flips.length * 10;
             if (groups[groupIdx].type === 'b') score += 5;
+
             if (score > bestScore) {
                 bestScore = score;
-                bestTrigger = trigger;
-                bestGroupIdx = groupIdx;
+                bestOptions = [[trigger, groupIdx]];
+            } else if (score === bestScore) {
+                bestOptions.push([trigger, groupIdx]);
             }
         }
-        return [bestTrigger, bestGroupIdx];
+
+        if (bestOptions.length > 0) {
+            return bestOptions[Math.floor(Math.random() * bestOptions.length)];
+        }
+        return [null, null];
     }
 }
 
@@ -627,6 +789,7 @@ class Game {
         document.getElementById('btn-pvp').addEventListener('click', () => this.startGame('pvp'));
         document.getElementById('btn-pve').addEventListener('click', () => this.startGame('pve'));
         document.getElementById('btn-rules').addEventListener('click', () => this.showRules());
+        document.getElementById('btn-about').addEventListener('click', () => this.showAbout());
         document.getElementById('btn-back').addEventListener('click', () => this.backToMenu());
         document.getElementById('btn-confirm').addEventListener('click', () => this.confirmAction());
         document.getElementById('btn-skip').addEventListener('click', () => this.skipAction());
@@ -636,6 +799,7 @@ class Game {
         document.getElementById('btn-prev').addEventListener('click', () => this.prevRulePage());
         document.getElementById('btn-next').addEventListener('click', () => this.nextRulePage());
         document.getElementById('btn-back-rules').addEventListener('click', () => this.backToMenuFromRules());
+        document.getElementById('btn-back-from-about').addEventListener('click', () => this.backFromAbout());
 
         window.addEventListener('resize', () => {
             this.resizeCanvas();
@@ -678,11 +842,22 @@ class Game {
         this.updateRulePage();
     }
 
+    showAbout() {
+        document.getElementById('mode-select').style.display = 'none';
+        document.getElementById('about-panel').style.display = 'inline-block';
+    }
+
+    backFromAbout() {
+        document.getElementById('about-panel').style.display = 'none';
+        document.getElementById('mode-select').style.display = 'inline-block';
+    }
+
     backToMenu() {
         this.clearAITimers();
         this.state = STATE.MODE_SELECT;
         document.getElementById('game-area').style.display = 'none';
         document.getElementById('rule-intro').style.display = 'none';
+        document.getElementById('about-panel').style.display = 'none';
         document.getElementById('mode-select').style.display = 'inline-block';
     }
 
