@@ -339,7 +339,93 @@ class ChainFlipHandler {
     }
 }
 
-// 简单难度：贪心算法
+// 简单难度：有策略但比较简单的AI
+class VerySimpleAI {
+    constructor(playerNum) {
+        this.playerNum = playerNum;
+        this.opponent = 3 - playerNum;
+    }
+
+    chooseMove(board) {
+        const allMoves = [];
+        const fromPositions = board.getValidMoves(this.playerNum);
+
+        // 收集所有合法走法
+        for (const from of fromPositions) {
+            const toPositions = board.getValidMoves(this.playerNum, from);
+            for (const to of toPositions) {
+                allMoves.push([from, to]);
+            }
+        }
+
+        if (allMoves.length === 0) return null;
+
+        // 有翻转机会时，一定选能翻转的走法（但不一定选翻转最多的）
+        const movesWithFlip = [];
+        for (const [from, to] of allMoves) {
+            const simBoard = board.copy();
+            simBoard.movePiece(from, to);
+            const flipRule = new FlipRule(simBoard);
+            const flipGroups = flipRule.getFlipGroupsAfterMove(this.playerNum, to);
+            if (flipGroups.length > 0) {
+                movesWithFlip.push([from, to]);
+            }
+        }
+
+        if (movesWithFlip.length > 0) {
+            // 有翻转机会，优先选能翻转的，随便选一个就行
+            return movesWithFlip[Math.floor(Math.random() * movesWithFlip.length)];
+        }
+
+        // 没有翻转机会时，优先往棋盘中间走
+        let bestScore = -Infinity;
+        let bestMoves = [];
+        for (const [from, to] of allMoves) {
+            const score = Board.evaluatePosition(to);
+            if (score > bestScore) {
+                bestScore = score;
+                bestMoves = [[from, to]];
+            } else if (score === bestScore) {
+                bestMoves.push([from, to]);
+            }
+        }
+
+        return bestMoves[Math.floor(Math.random() * bestMoves.length)];
+    }
+
+    chooseFlipGroup(groups) {
+        // 翻转时也选择翻转数量较多的，但不用最优，在较好的里面随机选
+        let goodIndices = [];
+        let maxFlips = 0;
+        for (let i = 0; i < groups.length; i++) {
+            const flips = groups[i].flips.length;
+            if (flips > maxFlips) {
+                maxFlips = flips;
+                goodIndices = [i];
+            } else if (flips === maxFlips) {
+                goodIndices.push(i);
+            }
+        }
+        return goodIndices[Math.floor(Math.random() * goodIndices.length)];
+    }
+
+    chooseChainTrigger(chainHandler) {
+        const triggers = chainHandler.getTriggers();
+        if (triggers.length === 0) return [null, null];
+
+        // 有连锁翻转机会时，肯定选择翻转
+        const trigger = triggers[Math.floor(Math.random() * triggers.length)];
+        chainHandler.selectTrigger(trigger);
+        const groups = chainHandler.getAvailableGroups();
+        if (groups.length > 0) {
+            const groupIdx = Math.floor(Math.random() * groups.length);
+            return [trigger, groupIdx];
+        }
+        return [null, null];
+    }
+}
+
+// 中等难度：贪心算法
 class GreedyAI {
     constructor(playerNum) {
         this.playerNum = playerNum;
@@ -863,9 +949,9 @@ class Game {
         // 重新创建AI实例（AI是无状态的，可以直接重建）
         if (this.gameMode === 'pve') {
             if (this.difficulty === 'easy') {
-                this.ai = new GreedyAI(2);
+                this.ai = new VerySimpleAI(2);
             } else if (this.difficulty === 'medium') {
-                this.ai = new SimpleAI(2, 2);
+                this.ai = new GreedyAI(2);
             } else { // hell
                 this.ai = new SimpleAI(2, 3);
             }
@@ -980,9 +1066,9 @@ class Game {
         this.gameMode = mode;
         if (mode === 'pve') {
             if (this.difficulty === 'easy') {
-                this.ai = new GreedyAI(2);
+                this.ai = new VerySimpleAI(2);
             } else if (this.difficulty === 'medium') {
-                this.ai = new SimpleAI(2, 2);
+                this.ai = new GreedyAI(2);
             } else { // hell
                 this.ai = new SimpleAI(2, 3);
             }
@@ -1408,9 +1494,9 @@ class Game {
         // 重新创建AI实例
         if (this.gameMode === 'pve') {
             if (this.difficulty === 'easy') {
-                this.ai = new GreedyAI(2);
+                this.ai = new VerySimpleAI(2);
             } else if (this.difficulty === 'medium') {
-                this.ai = new SimpleAI(2, 2);
+                this.ai = new GreedyAI(2);
             } else { // hell
                 this.ai = new SimpleAI(2, 3);
             }
