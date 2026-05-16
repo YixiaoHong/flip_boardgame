@@ -1429,6 +1429,7 @@ class Game {
         const currentTurnEl = document.getElementById('current-turn');
         const scoreEl = document.getElementById('score');
         const messageEl = document.getElementById('message');
+        const instructionEl = document.getElementById('instruction');
         const btnConfirm = document.getElementById('btn-confirm');
         const btnSkip = document.getElementById('btn-skip');
         const btnUndo = document.getElementById('btn-undo');
@@ -1477,9 +1478,12 @@ class Game {
             if (this.state === STATE.FLIPPING || this.state === STATE.CHAIN_FLIPPING) {
                 btnConfirm.style.display = 'inline-block';
                 btnSkip.style.display = 'inline-block';
+                instructionEl.style.display = 'block';
+                instructionEl.textContent = '【翻转操作方法：点黄色高亮己方→点要翻转敌方→点确定】';
             } else {
                 btnConfirm.style.display = 'none';
                 btnSkip.style.display = 'none';
+                instructionEl.style.display = 'none';
             }
 
             // 悔棋按钮：只在玩家回合且AI没有思考时显示
