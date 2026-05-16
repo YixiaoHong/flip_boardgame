@@ -1277,8 +1277,8 @@ class Game {
             this.noFlipStepCount++;
         }
 
-        // 检查是否达到强制结算条件（连续10步无翻转）
-        if (this.noFlipStepCount >= 10) {
+        // 检查是否达到强制结算条件（连续20步无翻转）
+        if (this.noFlipStepCount >= 20) {
             this.forceSettle();
             return;
         }
@@ -1708,7 +1708,7 @@ class Game {
 
             currentTurnEl.textContent = '';
             if (isForceSettle) {
-                messageEl.textContent = `僵局！连续10步无翻转，玩家${winner}获胜（红${p1Count}vs蓝${p2Count}）`;
+                messageEl.textContent = `僵局！连续20步无翻转，玩家${winner}获胜（红${p1Count}vs蓝${p2Count}）`;
             } else {
                 messageEl.textContent = `玩家${winner}获胜！`;
             }
@@ -1755,9 +1755,9 @@ class Game {
             if (this.noFlipStepCount > 0) {
                 countdownEl.style.display = 'block';
                 if (this.noFlipStepCount === 1) {
-                    countdownEl.textContent = `⚠️ 上一步无翻转，请注意！还剩9步将强制结算！`;
+                    countdownEl.textContent = `⚠️ 上一步无翻转，请注意！还剩19步将强制结算！`;
                 } else {
-                    countdownEl.textContent = `⚠️ 连续${this.noFlipStepCount}步无翻转，还剩${10 - this.noFlipStepCount}步将强制结算！`;
+                    countdownEl.textContent = `⚠️ 连续${this.noFlipStepCount}步无翻转，还剩${20 - this.noFlipStepCount}步将强制结算！`;
                 }
             } else {
                 countdownEl.style.display = 'none';

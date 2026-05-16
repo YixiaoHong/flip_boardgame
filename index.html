@@ -86,7 +86,7 @@
             font-size: 14px;
             color: #666;
             margin: 8px 0;
-            padding: 10px 15px;
+            padding: 10px 20px;
             background: rgba(255,255,255,0.8);
             border-radius: 8px;
             max-width: 400px;
@@ -99,8 +99,8 @@
             color: #ff6600;
             font-weight: bold;
             margin: 8px 0;
-            padding: 10px 15px;
-            background: rgba(255,204,153,0.9);
+            padding: 10px 20px;
+            background: rgba(255,204,203,0.9);
             border-radius: 8px;
             max-width: 400px;
             margin-left: auto;
@@ -113,18 +113,18 @@
             display: inline-block;
             background: rgba(255,255,255,0.9);
             padding: 30px;
-            border-radius: 15px;
+            border-radius: 20px;
         }
         .menu-panel button {
             display: block;
-            width: 150px;
+            width: 200px;
             margin: 10px auto;
         }
         .rule-panel {
             display: none;
             background: rgba(255,255,255,0.9);
             padding: 30px;
-            border-radius: 15px;
+            border-radius: 20px;
             max-width: 400px;
             margin: 0 auto;
             text-align: left;
@@ -191,7 +191,7 @@
             <div class="rule-page active" data-page="0">
                 <p>双方各14个棋子，红方先手，轮流走棋。</p>
                 <p>【走棋规则】：每次可以沿横竖或斜线走一个棋子，可越过一条线上多个紧挨着的同阵营棋子（可以全是己方，也可以全是敌方），棋子不能重叠</p>
-                <p><strong>【获胜条件】：对方无子可走，或对方棋子全被吃完！</strong></p>
+                <p><strong>【获胜条件】：对方无子可走，或对方棋子全被吃完，或连续20步无翻转强制结算！</strong></p>
             </div>
             <div class="rule-page" data-page="1">
                 <h3>规则A：己-敌-己</h3>
@@ -209,7 +209,7 @@
                 <h3>胜利条件</h3>
                 <p>1. 对方棋子归零</p>
                 <p>2. 对方无法走棋</p>
-                <p>3. 连续10步无翻转强制结算</p>
+                <p>3. 连续20步无翻转强制结算，剩余棋子多者胜，如棋子数一样则最后执行者获胜</p>
             </div>
         </div>
         <div class="page-indicator" id="page-indicator">1/5</div>
@@ -252,6 +252,6 @@
         </div>
     </div>
 
-    <script src="game.js?v=4"></script>
+    <script src="game.js?v=5"></script>
 </body>
 </html>
