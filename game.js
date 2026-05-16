@@ -26,10 +26,10 @@ class Board {
 
     initPieces() {
         for (let x = 0; x < GRID_SIZE; x++) {
-            this.grid[0][x] = 1;
-            this.grid[1][x] = 1;
-            this.grid[5][x] = 2;
-            this.grid[6][x] = 2;
+            this.grid[5][x] = 1;
+            this.grid[6][x] = 1;
+            this.grid[0][x] = 2;
+            this.grid[1][x] = 2;
         }
     }
 

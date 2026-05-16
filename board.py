@@ -13,14 +13,14 @@ class Board:
 
     def _init_pieces(self):
         """初始化棋子位置"""
-        # 玩家1在顶部两行 (y=0, y=1)
+        # 玩家1在底部两行 (y=5, y=6)
         for x in range(GRID_SIZE):
-            self.grid[0][x] = 1
-            self.grid[1][x] = 1
-        # 玩家2在底部两行 (y=5, y=6)
+            self.grid[5][x] = 1
+            self.grid[6][x] = 1
+        # 玩家2在顶部两行 (y=0, y=1)
         for x in range(GRID_SIZE):
-            self.grid[5][x] = 2
-            self.grid[6][x] = 2
+            self.grid[0][x] = 2
+            self.grid[1][x] = 2
 
     def get_piece(self, pos: Tuple[int, int]) -> int:
         x, y = pos
