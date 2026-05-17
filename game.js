@@ -1571,6 +1571,20 @@ class Game {
     drawPieces() {
         const ctx = this.ctx;
 
+        // 获取当前需要淡化显示的棋子
+        const fadedPositions = new Set();
+        if (this.state === STATE.FLIPPING && this.selectedFlipGroup !== null) {
+            for (const [pos, _] of this.pendingFlipGroups[this.selectedFlipGroup].flips) {
+                fadedPositions.add(pos.join(','));
+            }
+        }
+        if (this.state === STATE.CHAIN_FLIPPING && this.chainHandler.selectedGroup !== null) {
+            const groups = this.chainHandler.getAvailableGroups();
+            for (const [pos, _] of groups[this.chainHandler.selectedGroup].flips) {
+                fadedPositions.add(pos.join(','));
+            }
+        }
+
         // 先绘制所有普通棋子
         for (let y = 0; y < GRID_SIZE; y++) {
             for (let x = 0; x < GRID_SIZE; x++) {
@@ -1599,7 +1613,8 @@ class Game {
                 if (!skip) {
                     const p = this.board.getPiece(pos);
                     if (p !== 0) {
-                        this.drawPieceAt(pos, p, 1);
+                        const isFaded = fadedPositions.has(pos.join(','));
+                        this.drawPieceAt(pos, p, isFaded ? 0.5 : 1);
                     }
                 }
             }
@@ -1658,18 +1673,20 @@ class Game {
         }
     }
 
-    drawPieceAt(pos, player, scale = 1) {
+    drawPieceAt(pos, player, alpha = 1) {
         const ctx = this.ctx;
         const color = player === 1 ? PLAYER1_COLOR : PLAYER2_COLOR;
         const [cx, cy] = this.posToScreen(pos);
-        const radius = Math.max(12, this.cellSize * 0.3) * scale;
+        const radius = Math.max(12, this.cellSize * 0.3);
         ctx.beginPath();
         ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.globalAlpha = alpha;
         ctx.fillStyle = color;
         ctx.fill();
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 2;
         ctx.stroke();
+        ctx.globalAlpha = 1;
     }
 
     drawHighlight() {
@@ -1696,16 +1713,25 @@ class Game {
         }
 
         if (this.state === STATE.FLIPPING) {
+            // 第一次吞并：显示触发棋子的黄色圈（就是刚移动的棋子）
+            if (this.selectedPos) {
+                const [cx, cy] = this.posToScreen(this.selectedPos);
+                ctx.beginPath();
+                ctx.arc(cx, cy, Math.max(22, this.cellSize * 0.55), 0, Math.PI * 2);
+                ctx.strokeStyle = HIGHLIGHT_COLOR;
+                ctx.lineWidth = 6;
+                ctx.stroke();
+            }
+            // 显示可翻转的选项（用彩色圈，但统一线宽，淡化交给drawPieces处理）
             const colors = ['#00c8ff', '#ff00ff', '#00ff80', '#ff8000'];
             for (let i = 0; i < this.pendingFlipGroups.length; i++) {
                 const col = colors[i % colors.length];
-                const w = this.selectedFlipGroup === i ? 6 : 3;
                 for (const [pos, _] of this.pendingFlipGroups[i].flips) {
                     const [cx, cy] = this.posToScreen(pos);
                     ctx.beginPath();
                     ctx.arc(cx, cy, Math.max(18, this.cellSize * 0.45), 0, Math.PI * 2);
                     ctx.strokeStyle = col;
-                    ctx.lineWidth = w;
+                    ctx.lineWidth = 3;
                     ctx.stroke();
                 }
             }
@@ -1715,8 +1741,8 @@ class Game {
             const triggers = this.chainHandler.getTriggers();
             const selTrig = this.chainHandler.selectedTrigger;
             const groups = this.chainHandler.getAvailableGroups();
-            const selIdx = this.chainHandler.getSelectedGroup();
 
+            // 连锁吞并：显示触发棋子的黄色圈
             for (const pos of triggers) {
                 const [cx, cy] = this.posToScreen(pos);
                 ctx.beginPath();
@@ -1740,16 +1766,16 @@ class Game {
             }
 
             if (selTrig !== null && groups.length > 0) {
+                // 显示可翻转的选项（用彩色圈，统一线宽，淡化交给drawPieces处理）
                 const colors = ['#00c8ff', '#ff00ff', '#00ff80', '#ff8000'];
                 for (let i = 0; i < groups.length; i++) {
                     const col = colors[i % colors.length];
-                    const w = selIdx === i ? 6 : 3;
                     for (const [pos, _] of groups[i].flips) {
                         const [cx, cy] = this.posToScreen(pos);
                         ctx.beginPath();
                         ctx.arc(cx, cy, Math.max(18, this.cellSize * 0.45), 0, Math.PI * 2);
                         ctx.strokeStyle = col;
-                        ctx.lineWidth = w;
+                        ctx.lineWidth = 3;
                         ctx.stroke();
                     }
                 }
