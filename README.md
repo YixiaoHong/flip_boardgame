@@ -43,4 +43,52 @@
 - 优化的触摸区域大小
 - 支持单指操作
 
+## AI 对战 Request API
+
+项目已新增后端接口，方便 AI 直接调用棋局计算和 AI 落子。
+
+详细文档请查看 [API.md](API.md)。
+
+### 启动服务器
+
+```bash
+node server.js
+```
+
+### 可用接口
+
+- `GET /api/ping`
+  - 测试服务是否可用。
+
+- `GET /api/game/new`
+  - 返回初始棋盘状态。
+  - 响应：`{ board, currentPlayer: 1 }`
+
+- `POST /api/game/valid-moves`
+  - 输入当前棋盘和玩家，返回所有合法走法。
+  - 请求示例：
+    ```json
+    {
+      "board": [[0,0,2,...], ...],
+      "player": 1
+    }
+    ```
+
+- `POST /api/ai/move`
+  - 输入当前棋盘、玩家和难度，返回 AI 落子结果和最终棋盘。
+  - 请求示例：
+    ```json
+    {
+      "board": [[0,0,2,...], ...],
+      "player": 2,
+      "difficulty": "easy"
+    }
+    ```
+
+### AI 难度
+
+- `easy`：VerySimpleAI
+- `medium`：GreedyAI
+- `hell`：SimpleAI（Minimax 深度 3）
+
 祝你玩得开心！
